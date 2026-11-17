@@ -1,0 +1,60 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'ru.course'
+version = '1.0.0'
+repositories { mavenCentral() }
+def platform = providers.gradleProperty('targetPlatform').getOrElse(
+    System.getProperty('os.name').toLowerCase().contains('mac') ?
+        (System.getProperty('os.arch').contains('aarch64') ? 'mac-aarch64' : 'mac') :
+        (System.getProperty('os.name').toLowerCase().contains('win') ? 'win' : 'linux'))
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+dependencies {
+    implementation 'org.apache.logging.log4j:log4j-api:2.25.3'
+    implementation 'org.apache.logging.log4j:log4j-core:2.25.3'
+    ['base', 'graphics', 'controls', 'swing'].each {
+        implementation "org.openjfx:javafx-${it}:21.0.9:${platform}"
+    }
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+application { mainClass = 'ru.course.phonebook.Launcher' }
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+test { useJUnitPlatform() }
+jar {
+    archiveFileName = 'phonebook.jar'
+    manifest {
+        attributes 'Main-Class': application.mainClass.get(),
+            'Class-Path': configurations.runtimeClasspath.files.collect { 'lib/' + it.name }.join(' ')
+    }
+}
+tasks.register('bundle', Sync) {
+    dependsOn jar
+    into layout.buildDirectory.dir("bundle-${platform}")
+    from(tasks.jar)
+    from(configurations.runtimeClasspath) { into 'lib' }
+}
+tasks.register('documentedSources', Copy) {
+    from 'src/documented/java'
+    into layout.buildDirectory.dir('documented-sources')
+}
+javadoc {
+    dependsOn documentedSources
+    source = fileTree('src/documented/java') { include '**/*.java' }
+    classpath = configurations.compileClasspath
+    options.encoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PRIVATE
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+tasks.register('guiCheck', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ru.course.phonebook.GuiCheckLauncher'
+}
